@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 分栏阅读器 | 我的博客</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        h1 {
+            margin-bottom: 10px;
+        }
+        
+        .upload-section {
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .upload-area {
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 20px auto;
+            max-width: 500px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-area:hover {
+            background-color: #f1f8ff;
+            border-color: #2980b9;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            color: #3498db;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .viewer-section {
+            display: flex;
+            height: 600px;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: #f5f5f5;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #ddd;
+        }
+        
+        .pdf-pages {
+            list-style: none;
+        }
+        
+        .pdf-pages li {
+            padding: 10px;
+            margin-bottom: 5px;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .pdf-pages li:hover {
+            background: #e3f2fd;
+        }
+        
+        .pdf-pages li.active {
+            background: #bbdefb;
+            font-weight: bold;
+        }
+        
+        .pdf-viewer {
+            flex: 1;
+            display: flex;
+            overflow: auto;
+            position: relative;
+        }
+        
+        .column {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #eee;
+        }
+        
+        .column:last-child {
+            border-right: none;
+        }
+        
+        .page-canvas {
+            width: 100%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            padding: 15px;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .page-info {
+            display: flex;
+            align-items: center;
+            margin: 0 15px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .viewer-section {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 200px;
+            }
+            
+            .pdf-viewer {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PDF 分栏阅读器</h1>
+            <p>在博客中轻松阅读PDF文档</p>
+        </header>
+        
+        <section class="upload-section">
+            <h2>上传PDF文件</h2>
+            <div class="upload-area" id="dropArea">
+                <div class="upload-icon">📄</div>
+                <p>拖放PDF文件到此处，或</p>
+                <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+                <button class="btn" onclick="document.getElementById('fileInput').click()">选择文件</button>
+            </div>
+        </section>
+        
+        <section class="viewer-section" id="viewerSection" style="display: none;">
+            <div class="sidebar">
+                <h3>页面导航</h3>
+                <ul class="pdf-pages" id="pageNav"></ul>
+            </div>
+            
+            <div class="pdf-viewer" id="pdfViewer">
+                <div class="column" id="leftColumn"></div>
+                <div class="column" id="rightColumn"></div>
+            </div>
+        </section>
+        
+        <div class="controls">
+            <button class="btn" id="prevBtn">上一页</button>
+            <div class="page-info">
+                页码: <span id="currentPage">1</span> / <span id="totalPages">1</span>
+            </div>
+            <button class="btn" id="nextBtn">下一页</button>
+            <button class="btn" id="singleColumnBtn">单栏模式</button>
+            <button class="btn" id="twoColumnBtn">双栏模式</button>
+        </div>
+        
+        <footer>
+            <p>PDF阅读功能由PDF.js提供支持 | 集成到您的GitHub Pages博客</p>
+        </footer>
+    </div>
+
+    <script>
+        // PDFJS库的worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
+        
+        // 全局变量
+        let pdfDoc = null;
+        let currentPage = 1;
+        let totalPages = 0;
+        let isTwoColumnMode = true;
+        
+        // 获取DOM元素
+        const fileInput = document.getElementById('fileInput');
+        const dropArea = document.getElementById('dropArea');
+        const viewerSection = document.getElementById('viewerSection');
+        const pageNav = document.getElementById('pageNav');
+        const leftColumn = document.getElementById('leftColumn');
+        const rightColumn = document.getElementById('rightColumn');
+        const currentPageSpan = document.getElementById('currentPage');
+        const totalPagesSpan = document.getElementById('totalPages');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const singleColumnBtn = document.getElementById('singleColumnBtn');
+        const twoColumnBtn = document.getElementById('twoColumnBtn');
+        
+        // 事件监听器
+        fileInput.addEventListener('change', handleFileSelect);
+        dropArea.addEventListener('dragover', handleDragOver);
+        dropArea.addEventListener('drop', handleFileDrop);
+        prevBtn.addEventListener('click', goToPrevPage);
+        nextBtn.addEventListener('click', goToNextPage);
+        singleColumnBtn.addEventListener('click', () => changeColumnMode(false));
+        twoColumnBtn.addEventListener('click', () => changeColumnMode(true));
+        
+        // 处理文件选择
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                loadPDF(file);
+            } else {
+                alert('请选择有效的PDF文件');
+            }
+        }
+        
+        // 处理拖放事件
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            dropArea.style.backgroundColor = '#e3f2fd';
+        }
+        
+        function handleFileDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            dropArea.style.backgroundColor = '';
+            
+            const file = event.dataTransfer.files[0];
+            if (file && file.type === 'application/pdf') {
+                loadPDF(file);
+            } else {
+                alert('请拖放有效的PDF文件');
+            }
+        }
+        
+        // 加载PDF文件
+        function loadPDF(file) {
+            const fileReader = new FileReader();
+            
+            fileReader.onload = function() {
+                const typedarray = new Uint8Array(this.result);
+                
+                // 使用PDF.js加载PDF
+                pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                    pdfDoc = pdf;
+                    totalPages = pdf.numPages;
+                    totalPagesSpan.textContent = totalPages;
+                    
+                    // 显示阅读器部分
+                    viewerSection.style.display = 'flex';
+                    
+                    // 创建页面导航
+                    createPageNavigation();
+                    
+                    // 渲染第一页
+                    renderPage(1);
+                }).catch(function(error) {
+                    console.error('加载PDF失败:', error);
+                    alert('加载PDF失败，请确保是有效的PDF文件');
+                });
+            };
+            
+            fileReader.readAsArrayBuffer(file);
+        }
+        
+        // 创建页面导航
+        function createPageNavigation() {
+            pageNav.innerHTML = '';
+            
+            for (let i = 1; i <= totalPages; i++) {
+                const li = document.createElement('li');
+                li.textContent = `第 ${i} 页`;
+                li.dataset.page = i;
+                
+                li.addEventListener('click', function() {
+                    renderPage(parseInt(this.dataset.page));
+                });
+                
+                pageNav.appendChild(li);
+            }
+        }
+        
+        // 渲染指定页面
+        function renderPage(pageNum) {
+            if (pageNum < 1 || pageNum > totalPages) return;
+            
+            currentPage = pageNum;
+            currentPageSpan.textContent = currentPage;
+            
+            // 更新导航激活状态
+            const navItems = pageNav.querySelectorAll('li');
+            navItems.forEach(item => {
+                if (parseInt(item.dataset.page) === currentPage) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // 清除现有内容
+            leftColumn.innerHTML = '';
+            rightColumn.innerHTML = '';
+            
+            if (isTwoColumnMode && currentPage < totalPages) {
+                // 双页模式 - 显示当前页和下一页
+                renderPageToColumn(currentPage, leftColumn);
+                renderPageToColumn(currentPage + 1, rightColumn);
+            } else {
+                // 单页模式 - 只显示当前页
+                renderPageToColumn(currentPage, leftColumn);
+                if (currentPage === totalPages) {
+                    rightColumn.innerHTML = '<div style="text-align: center; padding: 50px; color: #999;">已经是最后一页</div>';
+                }
+            }
+        }
+        
+        // 将页面渲染到指定列
+        function renderPageToColumn(pageNum, column) {
+            column.innerHTML = '<div style="text-align: center;">加载中...</div>';
+            
+            pdfDoc.getPage(pageNum).then(function(page) {
+                const viewport = page.getViewport({ scale: 1.5 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.className = 'page-canvas';
+                
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                column.innerHTML = '';
+                column.appendChild(canvas);
+                
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                
+                page.render(renderContext);
+            });
+        }
+        
+        // 切换到上一页
+        function goToPrevPage() {
+            if (isTwoColumnMode && currentPage > 1) {
+                renderPage(currentPage - 2);
+            } else if (!isTwoColumnMode && currentPage > 1) {
+                renderPage(currentPage - 1);
+            }
+        }
+        
+        // 切换到下一页
+        function goToNextPage() {
+            if (isTwoColumnMode && currentPage < totalPages - 1) {
+                renderPage(currentPage + 2);
+            } else if (!isTwoColumnMode && currentPage < totalPages) {
+                renderPage(currentPage + 1);
+            }
+        }
+        
+        // 切换单/双栏模式
+        function changeColumnMode(twoColumn) {
+            isTwoColumnMode = twoColumn;
+            renderPage(currentPage);
+        }
+    </script>
+</body>
+</html>
